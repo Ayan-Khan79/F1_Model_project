@@ -30,4 +30,4 @@ The system uses a **ReAct Agent** framework. When a user asks a question, the ag
 
 ---
 **Developed by Mohammad Ayan**  
-*MERN Specialist | Final Year CSE Student | Analyst Trainee at Capgemini*
+*Final Year CSE Student*
