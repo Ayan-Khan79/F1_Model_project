@@ -169,18 +169,19 @@ with tab4:
     st.caption("F1 Expert System | Llama 3.3 & LangChain")
 
     if not GROQ_API_KEY:
-        st.error("Missing GROQ_API_KEY in .env file.")
+        st.error("Missing GROQ_API_KEY in secrets.")
     else:
         # 1. Initialize Agent
         llm = ChatGroq(temperature=0, model_name="llama-3.3-70b-versatile", groq_api_key=GROQ_API_KEY)
         
         custom_prefix = (
             "You are a strict F1 Race Engineer. Your knowledge is EXCLUSIVELY limited to Formula 1. "
-            "1. For schedule, locations, and timing, use the provided dataframe. "
-            "2. For drivers, teams, and F1 history, use your internal knowledge. "
-            "3. If LIVE TELEMETRY is provided in the prompt, prioritize it for questions about current track conditions. "
-            "4. CRITICAL: If a user asks about anything NOT related to Formula 1, politely refuse. "
-            "5. Always maintain a professional, analytical tone."
+            "You have a dataframe `df` for race schedules and history. "
+            "You will also see 'LIVE TELEMETRY' in some prompts; treat this as extra context to answer user questions. "
+            "CRITICAL: Always follow the 'Thought/Action/Action Input' format. "
+            "If you know the answer from internal knowledge or live data, you MUST still provide a 'Thought:' "
+            "and then a 'Final Answer:'. "
+            "Do not ignore the required output format even when using live data."
         )
 
         agent = create_pandas_dataframe_agent(
@@ -211,8 +212,7 @@ with tab4:
 
                 with st.chat_message("assistant"):
                     with st.spinner("Analyzing telemetry..."):
-                        # --- LIVE DATA INTEGRATION ---
-                        # Attempt to fetch live data to give the agent context
+                        # Attempt to fetch live context
                         live_weather = fetch_live_f1_data('weather')
                         live_intervals = fetch_live_f1_data('intervals')
                         
@@ -222,18 +222,22 @@ with tab4:
                             context_str += f"\n[LIVE WEATHER: Air {w['air_temperature']}°C, Track {w['track_temperature']}°C]"
                         
                         if live_intervals is not None and not live_intervals.empty:
-                            # Get the 3 most recent timing intervals
                             gaps = live_intervals.tail(3)[['driver_number', 'gap_to_leader']].to_string(index=False)
                             context_str += f"\n[LIVE GAPS: \n{gaps}]"
-                        
-                        # Combine original prompt with live context
+
                         full_query = f"{context_str}\n\nUser Question: {prompt}" if context_str else prompt
-                        
-                        # Run the agent
-                        response = agent.run(full_query)
-                        st.markdown(response)
+
+                        try:
+                            # Try the Agent path
+                            response = agent.run(full_query)
+                            st.markdown(response)
+                        except Exception as e:
+                            # Fallback Path
+                            st.warning("The Race Engineer is recalibrating telemetry. Answering directly...")
+                            response = llm.predict(f"{custom_prefix}\n\n{full_query}")
+                            st.markdown(response)
             
-            # Save assistant response to history
+            # Save assistant response and rerun
             st.session_state.messages.append({"role": "assistant", "content": response})
             st.rerun()
 st.divider()
